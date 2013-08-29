@@ -15,10 +15,12 @@ import wave
 
 from math import sin
 
+TAU = numpy.pi * 2
 
 COLOURS = { 'black' : (0, 0, 0),
             'other-grey' : (0.25, 0.25, 0.25),
             'grey' : (0.4, 0.4, 0.4),
+            'yellow' : (0.5, 0.5, 0.25),
             'white' : (1, 1, 1)}
 
 
@@ -60,6 +62,10 @@ class GLPlotWidget(QGLWidget):
     player = Player(4,4)
     eggs = {v : [] for v in COLOURS.values()}
     frequencies = [0 for x in xrange(8)]
+    data_signals = {}
+    sample_rate = 44100 # Hz
+    omega = TAU / sample_rate
+    highlighted_x = 0
 
     def initializeGL(self):
         """Initialize OpenGL, VBOs, upload data on the GPU, etc.
@@ -76,8 +82,12 @@ class GLPlotWidget(QGLWidget):
     def add_egg(self, x, y, color=COLOURS['white']):
         self.eggs[color].append((x, y))
         self.frequencies[x] = generate_frequency(y)
+        self.data_signals[self.frequencies[x]] = self._generate_sound(self.frequencies[x], self.sample_rate, self.omega)
 
     def _generate_sound(self, frequency, sample_rate, omega):
+        if frequency in self.data_signals:
+            return self.data_signals[frequency]
+
         volume = 0
         period = sample_rate / frequency
         data = numpy.ones(period, dtype=numpy.float)
@@ -88,8 +98,8 @@ class GLPlotWidget(QGLWidget):
 
         volume_increase = 16000 / (data_length)
 
+        temp_frequency = frequency
         for i in xrange(data_length):
-            temp_frequency = frequency
 
             temp_frequency += randint(-100, 100) / 10
 
@@ -113,23 +123,23 @@ class GLPlotWidget(QGLWidget):
 
     def make_wav(self):
         out_data = None
-        tau = numpy.pi * 2
 
         duration = len(self.frequencies) / 0.8 # seconds
-        sample_rate = 44100 # Hz
+        sample_rate = self.sample_rate
         samples = duration * sample_rate
-        omega = tau / sample_rate
-
+        omega = self.omega
         resizer = int(samples / duration)
+
+        the_sound_of_silence = self._generate_silence(sample_rate, omega)
+        the_sound_of_silence = numpy.resize(the_sound_of_silence, resizer)
 
         for frequency in self.frequencies:
 
             if frequency == 0:
-                data = self._generate_silence(sample_rate, omega)
+                data = the_sound_of_silence
             else:
                 data = self._generate_sound(frequency, sample_rate, omega)
-
-            data = numpy.resize(data, resizer)
+                data = numpy.resize(data, resizer)
 
             if out_data is not None:
                 out_data = numpy.hstack((out_data, data))
@@ -170,8 +180,11 @@ class GLPlotWidget(QGLWidget):
         # tell OpenGL that the VBO contains an array of vertices
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
         
-        r, g, b = COLOURS['grey']
+        r, g, b = COLOURS['yellow']
         gl.glColor3f(r, g, b)
+
+        for y in xrange(8):
+            self.draw_square(self.highlighted_x, y)
 
         self.draw_eggs()
         self.draw_player()
@@ -217,9 +230,13 @@ if __name__ == '__main__':
             self.sound_timer = QtCore.QTimer()
             QtCore.QObject.connect(self.sound_timer, QtCore.SIGNAL("timeout()"), self.play_sweet_songs)
 
+            self.highlight_timer = QtCore.QTimer()
+            QtCore.QObject.connect(self.highlight_timer, QtCore.SIGNAL("timeout()"), self.move_highlight)
+
             QtCore.QMetaObject.connectSlotsByName(self)
             self.paint_timer.start(30)
             self.sound_timer.start(1000 * 10)
+            self.highlight_timer.start(1000)
             self.button_timer.start(50)
 
             self.calculated = False
@@ -232,11 +249,21 @@ if __name__ == '__main__':
         def keyReleaseEvent(self, event):
             self.keys.remove(event.key())
 
+        def move_highlight(self):
+            if not self.calculated:
+                self.widget.highlighted_x = 8
+                return
+            self.widget.highlighted_x += 1
+            if self.widget.highlighted_x > 8:
+                self.widget.highlighted_x = 0
+
         def play_sweet_songs(self):
             if not self.calculated:
                 return
             self.wav = QtGui.QSound("my_wav.wav")
+            self.widget.highlighted_x = 0
             self.wav.play()
+
 
         def check(self):
 
@@ -246,32 +273,29 @@ if __name__ == '__main__':
                 if key == QtCore.Qt.Key_A:
                     if player.x > 0:
                         self.widget.player.x -= 1
-                if key == QtCore.Qt.Key_D:
+                elif key == QtCore.Qt.Key_D:
                     if player.x < 7:
                         self.widget.player.x += 1
-                if key == QtCore.Qt.Key_W:
+                elif key == QtCore.Qt.Key_W:
                     if player.y < 7:
                         self.widget.player.y += 1
-                if key == QtCore.Qt.Key_S:
+                elif key == QtCore.Qt.Key_S:
                     if player.y > 0:
                         self.widget.player.y -= 1
-                if key == QtCore.Qt.Key_Space:
+                elif key == QtCore.Qt.Key_Space:
                     self.widget.add_egg(self.widget.player.x, self.widget.player.y, COLOURS['white'])
-                if key == QtCore.Qt.Key_1:
-                    self.widget.player.color = COLOURS['white']
-                if key == QtCore.Qt.Key_2:
-                    self.widget.player.color = COLOURS['grey']
-                if key == QtCore.Qt.Key_3:
-                    self.widget.player.color = COLOURS['other-grey']
-
-                if key == QtCore.Qt.Key_T:
+                elif key == QtCore.Qt.Key_T:
                     if self.wav is not None:
                         self.wav.stop()
                     self.calculated = False
                     self.widget.make_wav()
                     self.calculated = True
-                    if key in self.keys:
-                        self.keys.remove(key)
+                elif key == QtCore.Qt.Key_1:
+                    self.widget.player.color = COLOURS['white']
+                elif key == QtCore.Qt.Key_2:
+                    self.widget.player.color = COLOURS['grey']
+                elif key == QtCore.Qt.Key_3:
+                    self.widget.player.color = COLOURS['other-grey']
  
     # create the QT App and window
     app = QtGui.QApplication(sys.argv)

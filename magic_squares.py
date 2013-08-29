@@ -96,7 +96,7 @@ class GLPlotWidget(QGLWidget):
 
         fifth = data_length / 5
 
-        volume_increase = 16000 / (data_length)
+        volume_increase = 16000 / (fifth)
 
         temp_frequency = frequency
         for i in xrange(data_length):
@@ -250,20 +250,18 @@ if __name__ == '__main__':
             self.keys.remove(event.key())
 
         def move_highlight(self):
-            if not self.calculated:
-                self.widget.highlighted_x = 8
-                return
             self.widget.highlighted_x += 1
             if self.widget.highlighted_x > 8:
+                if self.wav is not None:
+                    self.wav.stop()
                 self.widget.highlighted_x = 0
+                if self.wav is not None:
+                    self.wav.play()
 
         def play_sweet_songs(self):
             if not self.calculated:
                 return
             self.wav = QtGui.QSound("my_wav.wav")
-            self.widget.highlighted_x = 0
-            self.wav.play()
-
 
         def check(self):
 

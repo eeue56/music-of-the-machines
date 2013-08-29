@@ -61,7 +61,7 @@ class GLPlotWidget(QGLWidget):
     width, height = 92, 64
     player = Player(4,4)
     eggs = {v : [] for v in COLOURS.values()}
-    frequencies = [0 for x in xrange(8)]
+    frequencies = [[] for x in xrange(8)]
     data_signals = {}
     sample_rate = 44100 # Hz
     omega = TAU / sample_rate
@@ -81,8 +81,40 @@ class GLPlotWidget(QGLWidget):
 
     def add_egg(self, x, y, color=COLOURS['white']):
         self.eggs[color].append((x, y))
-        self.frequencies[x] = generate_frequency(y)
-        self.data_signals[self.frequencies[x]] = self._generate_sound(self.frequencies[x], self.sample_rate, self.omega)
+        self.frequencies[x].append(generate_frequency(y))
+        self.data_signals[self.frequencies[x][-1]] = self._generate_sound(self.frequencies[x][-1], self.sample_rate, self.omega)
+
+
+    def _generate_sound_with_frequencies(self, frequencies, sample_rate, omega):
+        volume = 0
+        period = sample_rate / (sum(frequencies) / len(frequencies))
+        data = numpy.ones(period, dtype=numpy.float)
+
+        data_length = len(data)
+
+        fifth = data_length / 5
+
+        volume_increase = 16000 / (fifth)
+
+        for frequency in frequencies:
+            temp_frequency = frequency
+            for i in xrange(data_length):
+
+                temp_frequency += randint(-100, 100) / 10
+
+                data[i] = data[i] + volume * sin(i * omega * temp_frequency)
+
+                if i <= fifth:
+                    volume += volume_increase
+                elif i <= fifth * 2:
+                    volume -= volume_increase / 2
+                elif i >= fifth * 4.2:
+                    volume -= volume_increase / 1.5
+                else:
+                    volume -= volume_increase / fifth
+
+        data = data / len(frequencies)
+        return data
 
     def _generate_sound(self, frequency, sample_rate, omega):
         if frequency in self.data_signals:
@@ -135,10 +167,13 @@ class GLPlotWidget(QGLWidget):
 
         for frequency in self.frequencies:
 
-            if frequency == 0:
+            if len(frequency) == 0:
                 data = the_sound_of_silence
             else:
-                data = self._generate_sound(frequency, sample_rate, omega)
+                if len(frequency) == 1:
+                    data = self._generate_sound(frequency[0], sample_rate, omega)
+                else:
+                    data = self._generate_sound_with_frequencies(frequency, sample_rate, omega)
                 data = numpy.resize(data, resizer)
 
             if out_data is not None:

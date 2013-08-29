@@ -107,7 +107,7 @@ class GLPlotWidget(QGLWidget):
         return data
 
     def _generate_silence(self, sample_rate, omega):
-        period = sample_rate / omega
+        period = sample_rate / 128
         data = numpy.zeros(period, dtype=numpy.float)
         return data
 
@@ -115,7 +115,7 @@ class GLPlotWidget(QGLWidget):
         out_data = None
         tau = numpy.pi * 2
 
-        duration = len(self.frequencies) # seconds
+        duration = len(self.frequencies) / 0.8 # seconds
         sample_rate = 44100 # Hz
         samples = duration * sample_rate
         omega = tau / sample_rate
@@ -228,7 +228,7 @@ if __name__ == '__main__':
 
             player = self.widget.player
 
-            for key in self.keys:
+            for key in self.keys[:]:
                 if key == QtCore.Qt.Key_A:
                     if player.x > 0:
                         self.widget.player.x -= 1
@@ -254,6 +254,9 @@ if __name__ == '__main__':
                     self.widget.make_wav()
                     wav = QtGui.QSound("my_wav.wav")
                     wav.play()
+
+                    if key in self.keys:
+                        self.keys.remove(key)
  
     # create the QT App and window
     app = QtGui.QApplication(sys.argv)

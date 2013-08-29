@@ -198,6 +198,8 @@ if __name__ == '__main__':
         def __init__(self):
             super(TestWindow, self).__init__()
             # initialize the GL widget
+
+            self.wav = None
             self.widget = GLPlotWidget()
             self.color = COLOURS['white']
             self.keys = []
@@ -212,9 +214,15 @@ if __name__ == '__main__':
             self.button_timer = QtCore.QTimer()
             QtCore.QObject.connect(self.button_timer, QtCore.SIGNAL("timeout()"), self.check)
 
+            self.sound_timer = QtCore.QTimer()
+            QtCore.QObject.connect(self.sound_timer, QtCore.SIGNAL("timeout()"), self.play_sweet_songs)
+
             QtCore.QMetaObject.connectSlotsByName(self)
             self.paint_timer.start(30)
+            self.sound_timer.start(1000 * 10)
             self.button_timer.start(50)
+
+            self.calculated = False
 
             self.resize(500, 500)
 
@@ -223,6 +231,12 @@ if __name__ == '__main__':
 
         def keyReleaseEvent(self, event):
             self.keys.remove(event.key())
+
+        def play_sweet_songs(self):
+            if not self.calculated:
+                return
+            self.wav = QtGui.QSound("my_wav.wav")
+            self.wav.play()
 
         def check(self):
 
@@ -251,10 +265,11 @@ if __name__ == '__main__':
                     self.widget.player.color = COLOURS['other-grey']
 
                 if key == QtCore.Qt.Key_T:
+                    if self.wav is not None:
+                        self.wav.stop()
+                    self.calculated = False
                     self.widget.make_wav()
-                    wav = QtGui.QSound("my_wav.wav")
-                    wav.play()
-
+                    self.calculated = True
                     if key in self.keys:
                         self.keys.remove(key)
  

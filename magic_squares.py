@@ -15,6 +15,9 @@ import wave
 
 from math import sin
 
+from instruments import *
+import copy
+
 TAU = numpy.pi * 2
 
 COLOURS = { 'black' : (0, 0, 0),
@@ -67,6 +70,10 @@ class GLPlotWidget(QGLWidget):
     omega = TAU / sample_rate
     highlighted_x = 0
 
+    def __init__(self, instruments, *args, **kwargs):
+        QGLWidget.__init__(self, *args, **kwargs)
+        self.instruments = instruments
+
     def initializeGL(self):
         """Initialize OpenGL, VBOs, upload data on the GPU, etc.
         """
@@ -81,9 +88,11 @@ class GLPlotWidget(QGLWidget):
 
     def add_egg(self, x, y, color=COLOURS['white']):
         self.eggs[color].append((x, y))
-        self.frequencies[x].append(generate_frequency(y))
+        freq = generate_frequency(y)
+        if freq not in self.frequencies[x]:
+            self.frequencies[x].append(freq)
+        return
         self.data_signals[self.frequencies[x][-1]] = self._generate_sound(self.frequencies[x][-1], self.sample_rate, self.omega)
-
 
     def _generate_sound_with_frequencies(self, frequencies, sample_rate, omega):
         volume = 0
@@ -92,26 +101,17 @@ class GLPlotWidget(QGLWidget):
 
         data_length = len(data)
 
-        fifth = data_length / 5
-
-        volume_increase = 16000 / (fifth)
+        instrument = self._current_instrument(data_length, 30000)
 
         for frequency in frequencies:
             temp_frequency = frequency
             for i in xrange(data_length):
 
-                temp_frequency += randint(-100, 100) / 10
+                temp_frequency = instrument.variance(frequency, temp_frequency)
 
                 data[i] = data[i] + volume * sin(i * omega * temp_frequency)
 
-                if i <= fifth:
-                    volume += volume_increase
-                elif i <= fifth * 2:
-                    volume -= volume_increase / 2
-                elif i >= fifth * 4.2:
-                    volume -= volume_increase / 1.5
-                else:
-                    volume -= volume_increase / fifth
+                volume = instrument.envelope(volume, i)
 
         data = data / len(frequencies)
         return data
@@ -126,25 +126,20 @@ class GLPlotWidget(QGLWidget):
 
         data_length = len(data)
 
-        fifth = data_length / 5
+        instrument = self._current_instrument(data_length, 30000)
 
-        volume_increase = 16000 / (fifth)
-
-        temp_frequency = frequency
+        temp_frequency = copy.copy(frequency)
         for i in xrange(data_length):
 
-            temp_frequency += randint(-100, 100) / 10
+            temp_frequency = instrument.variance(frequency, temp_frequency)
 
             data[i] = volume * sin(i * omega * temp_frequency)
 
-            if i <= fifth:
-                volume += volume_increase
-            elif i <= fifth * 2:
-                volume -= volume_increase / 2
-            elif i >= fifth * 4.2:
-                volume -= volume_increase / 1.5
-            else:
-                volume -= volume_increase / fifth
+            volume = instrument.envelope(volume, i)
+
+        if frequency == 440:
+            print data
+
 
         return data
 
@@ -154,9 +149,8 @@ class GLPlotWidget(QGLWidget):
         return data
 
     def make_wav(self):
-        out_data = None
 
-        duration = len(self.frequencies) / 0.8 # seconds
+        duration = len(self.frequencies) # seconds
         sample_rate = self.sample_rate
         samples = duration * sample_rate
         omega = self.omega
@@ -165,29 +159,41 @@ class GLPlotWidget(QGLWidget):
         the_sound_of_silence = self._generate_silence(sample_rate, omega)
         the_sound_of_silence = numpy.resize(the_sound_of_silence, resizer)
 
-        for frequency in self.frequencies:
+        for instrument in self.instruments:
+            self._current_instrument = instrument
+            out_data = None
+            for frequency in self.frequencies[1:-2]:
 
-            if len(frequency) == 0:
-                data = the_sound_of_silence
-            else:
-                if len(frequency) == 1:
-                    data = self._generate_sound(frequency[0], sample_rate, omega)
+                if len(frequency) == 0:
+                    data = the_sound_of_silence
                 else:
-                    data = self._generate_sound_with_frequencies(frequency, sample_rate, omega)
-                data = numpy.resize(data, resizer)
+                    if len(frequency) == 1:
+                        data = self._generate_sound(frequency[0], sample_rate, omega)
+                    else:
+                        data = self._generate_sound_with_frequencies(frequency, sample_rate, omega)
+                    data = numpy.resize(data, resizer)
 
-            if out_data is not None:
-                out_data = numpy.hstack((out_data, data))
-            else:
-                out_data = data
+                    print 'Data length is ', len(data)
 
-        out_data = numpy.resize(out_data, (samples,))
-        out_signal = ''.join(wave.struct.pack('h', out_data[i]) for i in xrange(len(out_data)))
+                if out_data is not None:
 
-        sound_file = SoundFile("my_wav.wav", duration, sample_rate, 1, sample_rate, 2)
+                    out_data = numpy.hstack((out_data, data))
+                else:
+                    out_data = data
 
-        sound_file.write(out_signal)
-        sound_file.close()
+            out_data = numpy.resize(out_data, (samples,))
+            out_signal = ''.join(wave.struct.pack('h', out_data[i]) for i in xrange(len(out_data)))
+
+            location = "testing/"
+            sound_file = SoundFile('{}{}.wav'.format(location,instrument.__name__), 
+                duration, 
+                sample_rate, 
+                1, 
+                sample_rate, 
+                2)
+
+            sound_file.write(out_signal)
+            sound_file.close()
 
 
     def draw_eggs(self):        
@@ -248,7 +254,9 @@ if __name__ == '__main__':
             # initialize the GL widget
 
             self.wav = None
-            self.widget = GLPlotWidget()
+
+
+            self.widget = GLPlotWidget([Instrument, Flatter])
             self.color = COLOURS['white']
             self.keys = []
 

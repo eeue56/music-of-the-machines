@@ -20,6 +20,9 @@ import copy
 
 TAU = numpy.pi * 2
 
+MAX_X = 32
+MAX_Y = 16
+
 COLOURS = { 'black' : (0, 0, 0),
             'other-grey' : (0.25, 0.25, 0.25),
             'grey' : (0.4, 0.4, 0.4),
@@ -37,7 +40,7 @@ class Player(object):
 
 
 class SoundFile(object):
-    def  __init__(self, filename, length,  sample_rate, number_of_channels, frame_rate, sample_width):
+    def  __init__(self, filename, length, sample_rate, number_of_channels, frame_rate, sample_width):
         self.length = length
         self.file = wave.open(filename, 'wb')
 
@@ -64,7 +67,7 @@ class GLPlotWidget(QGLWidget):
     width, height = 92, 64
     player = Player(4,4)
     eggs = {v : [] for v in COLOURS.values()}
-    frequencies = [[] for x in xrange(8)]
+    frequencies = [[] for x in xrange(MAX_X)]
     data_signals = {}
     sample_rate = 44100 # Hz
     omega = TAU / sample_rate
@@ -88,6 +91,7 @@ class GLPlotWidget(QGLWidget):
 
     def add_egg(self, x, y, color=COLOURS['white']):
         self.eggs[color].append((x, y))
+        y = y - 12
         freq = generate_frequency(y)
         if freq not in self.frequencies[x]:
             self.frequencies[x].append(freq)
@@ -105,6 +109,7 @@ class GLPlotWidget(QGLWidget):
 
         for frequency in frequencies:
             temp_frequency = frequency
+            volume = 0
             for i in xrange(data_length):
 
                 temp_frequency = instrument.variance(frequency, temp_frequency)
@@ -137,10 +142,6 @@ class GLPlotWidget(QGLWidget):
 
             volume = instrument.envelope(volume, i)
 
-        if frequency == 440:
-            print data
-
-
         return data
 
     def _generate_silence(self, sample_rate, omega):
@@ -172,8 +173,6 @@ class GLPlotWidget(QGLWidget):
                     else:
                         data = self._generate_sound_with_frequencies(frequency, sample_rate, omega)
                     data = numpy.resize(data, resizer)
-
-                    print 'Data length is ', len(data)
 
                 if out_data is not None:
 
@@ -224,7 +223,7 @@ class GLPlotWidget(QGLWidget):
         r, g, b = COLOURS['yellow']
         gl.glColor3f(r, g, b)
 
-        for y in xrange(8):
+        for y in xrange(MAX_Y):
             self.draw_square(self.highlighted_x, y)
 
         self.draw_eggs()
@@ -241,7 +240,7 @@ class GLPlotWidget(QGLWidget):
         gl.glMatrixMode(gl.GL_PROJECTION)
         gl.glLoadIdentity()
         # the window corner OpenGL coordinates are (-+1, -+1)
-        gl.glOrtho(0, 8, 0, 8, -1, 1)
+        gl.glOrtho(0, MAX_X, 0, MAX_Y, -1, 1)
  
 if __name__ == '__main__':
     # import numpy for generating random data points
@@ -256,7 +255,7 @@ if __name__ == '__main__':
             self.wav = None
 
 
-            self.widget = GLPlotWidget([Instrument, Flatter])
+            self.widget = GLPlotWidget([Instrument, Flatter, Fierce, Organ])
             self.color = COLOURS['white']
             self.keys = []
 
@@ -294,7 +293,7 @@ if __name__ == '__main__':
 
         def move_highlight(self):
             self.widget.highlighted_x += 1
-            if self.widget.highlighted_x > 8:
+            if self.widget.highlighted_x > MAX_X:
                 if self.wav is not None:
                     self.wav.stop()
                 self.widget.highlighted_x = 0
@@ -315,10 +314,10 @@ if __name__ == '__main__':
                     if player.x > 0:
                         self.widget.player.x -= 1
                 elif key == QtCore.Qt.Key_D:
-                    if player.x < 7:
+                    if player.x < MAX_X - 1:
                         self.widget.player.x += 1
                 elif key == QtCore.Qt.Key_W:
-                    if player.y < 7:
+                    if player.y < MAX_Y - 1:
                         self.widget.player.y += 1
                 elif key == QtCore.Qt.Key_S:
                     if player.y > 0:
